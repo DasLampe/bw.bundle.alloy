@@ -1,0 +1,135 @@
+{% macro component_config(cfg) %}
+    {%- for key, values in cfg.items() -%}
+        {% if values is string %}
+            {%- if values|length > 0 -%}
+                {{ key }} = {{ values }}
+            {% endif %}
+        {% elif values is iterable and not values is mapping %}
+            {{ key }} = {{ values | replace('\'', '"') }}
+        {% else %}
+            {{ key }} {
+                {{ component_config(values) }}
+            }
+        {% endif %}
+    {%- endfor %}
+{%- endmacro  %}
+
+prometheus.remote_write "global" {
+    endpoint {
+        url = "{{ cfg.get('remote_prometheus').get('push_url') }}/api/v1/write"
+
+        {% if cfg.get('remote_prometheus').get('username', False) -%}
+        basic_auth {
+            username = "{{ cfg.get('remote_prometheus').get('username') }}"
+            password = "{{ cfg.get('remote_prometheus').get('password') }}"
+        }
+        {% endif %}
+
+        metadata_config { }
+
+        write_relabel_config {
+            target_label = "instance"
+            replacement  = "{{ node.hostname }}"
+        }
+    }
+}
+
+{% if cfg.get('blackbox', {}).get('enable_tcp_probe', False) %}
+prometheus.exporter.blackbox "tcp_probe" {
+    config = "{ modules: { tcp: { prober: tcp, timeout: 5s } } }"
+
+    {% for target_name, target_cfg in cfg.get('blackbox', {}).get('tcp_probes', {}) %}
+        target {
+            name    = "{{ target_name }}"
+            address = "{{ target_cfg.get("address", node.metadata.get('interfaces').get(node.metadata.get("main_interface")).get('ip_addresses')[0]) }}:{{ target_cfg.get("port") }}
+            module  = "tcp"
+        }
+    {% endfor %}
+}
+
+discovery.relabel "tcp_probe" {
+    targets = prometheus.exporter.blackbox.tcp_probe.targets
+
+    rule {
+        action          = "replace"
+        source_labels   = ["__param_module"]
+        target_label    = "type"
+    }
+
+    rule {
+        action          = "replace"
+        source_labels   = ["__parama_target"]
+        target          = "target"
+    }
+
+    rule {
+        action          = "replace"
+        source_labels   = ["job"]
+        regex           = "integrations/blackbox/(.*)"
+        target_label    = "instance"
+    }
+}
+
+prometheus.scrape "tcp_probe" {
+    targets = discovery.relabel.tcp_probe.output
+
+    forward_to = [
+        prometheus.remote_write.global.receiver,
+    ]
+}
+{% endif %}
+
+{% if cfg.get('blackbox', {}).get('enable_http_probes', False) %}
+prometheus.exporter.blackbox "http_probe" {
+    config = "{ modules: { http: { prober: http, timeout: 5s, http: { method: HEAD } } } }"
+
+    {% for target_name, target_cfg in cfg.get('blackbox', {}).get('http_probe', {}).items() %}
+    target {
+        name = "{{ target_name }}"
+        address = "{{ target_cfg.get("address") }}"
+        module = "{{ target_cfg.get("module", "http") }}"
+    }
+    {% endfor %}
+}
+
+discovery.relabel "http_probe" {
+    targets = prometheus.exporter.blackbox.http_probe.targets
+
+    rule {
+        action          = "replace"
+        source_labels   = ["__param_module"]
+        target_label    = "type"
+    }
+
+    rule {
+        action          = "replace"
+        source_labels   = ["__parama_target"]
+        target_label    = "target"
+    }
+
+    rule {
+        action          = "replace"
+        source_labels   = ["job"]
+        regex           = "integrations/blackbox/(.*)"
+        target_label    = "instance_target"
+    }
+}
+
+prometheus.scrape "http_probe" {
+    targets = discovery.relabel.http_probe.output
+
+    forward_to = [
+        prometheus.remote_write.global.receiver,
+    ]
+}
+{% endif %}
+
+{% for components,components_cfg in cfg.get('components', {}).items() %}
+    {%- for component, component_definition in components_cfg.items() %}
+        {%- for component_name, component_cfg in component_definition.items() %}
+{{ components }}.{{ component }} "{{ component_name }}" {
+    {{ component_config(component_cfg) }}
+}
+        {%- endfor %}
+    {%- endfor %}
+{%- endfor %}
