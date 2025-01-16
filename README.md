@@ -27,7 +27,6 @@ metadata = {
 },
 ```
 
-
 #### TCP Probe - Blackbox
 For TCP probes and to make the target definition a lot easier, you can use `tcp_probes`
 

@@ -43,6 +43,13 @@ prometheus.exporter.blackbox "tcp_probe" {
             name    = "{{ target_name }}"
             address = "{{ target_cfg.get("address", node.metadata.get('interfaces').get(node.metadata.get("main_interface")).get('ip_addresses')[0]) }}:{{ target_cfg.get("port") }}
             module  = "tcp"
+            {%- if target_cfg.get('labels', {}) %}
+            labels = {
+                {%- for k,v in target_cfg.get('labels').items() %}
+                "{{ k }}" = "{{ v }}",
+                {% endfor %}
+            }
+            {% endif %}
         }
     {% endfor %}
 }
@@ -66,7 +73,7 @@ discovery.relabel "tcp_probe" {
         action          = "replace"
         source_labels   = ["job"]
         regex           = "integrations/blackbox/(.*)"
-        target_label    = "instance"
+        target_label    = "instance_target"
     }
 }
 
@@ -88,6 +95,13 @@ prometheus.exporter.blackbox "http_probe" {
         name = "{{ target_name }}"
         address = "{{ target_cfg.get("address") }}"
         module = "{{ target_cfg.get("module", "http") }}"
+        {%- if target_cfg.get('labels', {}) %}
+        labels = {
+            {%- for k,v in target_cfg.get('labels').items() %}
+            "{{ k }}" = "{{ v }}",
+            {%- endfor %}
+        }
+        {% endif %}
     }
     {% endfor %}
 }
