@@ -58,7 +58,7 @@ discovery.relabel "tcp_probe" {
 
     rule {
         action          = "replace"
-        source_labels   = ["__parama_target"]
+        source_labels   = ["__param_target"]
         target          = "target"
     }
 
@@ -79,11 +79,11 @@ prometheus.scrape "tcp_probe" {
 }
 {% endif %}
 
-{% if cfg.get('blackbox', {}).get('enable_http_probes', False) %}
+{% if cfg.get('blackbox', {}).get('enable_http_probe', False) %}
 prometheus.exporter.blackbox "http_probe" {
     config = "{ modules: { http: { prober: http, timeout: 5s, http: { method: HEAD } } } }"
 
-    {% for target_name, target_cfg in cfg.get('blackbox', {}).get('http_probe', {}).items() %}
+    {% for target_name, target_cfg in cfg.get('blackbox', {}).get('http_probes', {}).items() %}
     target {
         name = "{{ target_name }}"
         address = "{{ target_cfg.get("address") }}"
@@ -103,7 +103,7 @@ discovery.relabel "http_probe" {
 
     rule {
         action          = "replace"
-        source_labels   = ["__parama_target"]
+        source_labels   = ["__param_target"]
         target_label    = "target"
     }
 
