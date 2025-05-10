@@ -59,3 +59,34 @@ defaults = {
         },
     },
 }
+
+@metadata_reactor
+def find_http_probes_in_groups(metadata):
+    if not metadata.get('alloy/blackbox/enable_http_probe', False):
+        raise DoNotRunAgain
+
+    http_probes = {}
+    for checked_node in sorted(repo.nodes_in_any_group(metadata.get('alloy/blackbox/http_probes_groups', [])), key=lambda x: x.name):
+        if not checked_node.has_bundle('nginx'):
+            continue
+
+        for site,site_cfg in checked_node.metadata.get('nginx/sites', {}).items():
+            if not site_cfg.get('enabled', False) or not site_cfg.get('monitoring', {}).get('enabled', True):
+                continue
+
+            scheme = 'https' if site_cfg.get('ssl', {}) else 'http'
+            http_probes[site] = {
+                'address': f'{scheme}://{site}',
+            }
+            for additional_name in site_cfg.get('additional_server_names', []):
+                http_probes[additional_name] = {
+                    'address': f'{scheme}://{additional_name}',
+                }
+
+    return {
+        'alloy': {
+            'blackbox': {
+                'http_probes': http_probes,
+            }
+        },
+    }
