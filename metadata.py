@@ -71,7 +71,7 @@ def find_http_probes_in_groups(metadata):
             continue
 
         for site,site_cfg in checked_node.metadata.get('nginx/sites', {}).items():
-            if not site_cfg.get('enabled', False) or not site_cfg.get('monitoring', {}).get('enabled', True):
+            if not site_cfg.get('enabled', False) or not site_cfg.get('monitoring', {}).get('enabled', False):
                 continue
 
             scheme = 'https' if site_cfg.get('ssl', {}) else 'http'
