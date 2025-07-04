@@ -47,6 +47,9 @@ files = {
         'tags': [
             '.pre'
         ],
+        'triggers': [
+            'action:force_update_apt_cache',
+        ],
     },
     '/etc/default/alloy': {
         'source': 'etc/default/alloy.j2',
